@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tetris - Funing Games</title>
+
+<!-- Retro Pixel Font -->
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<style>
+  body {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    color: white;
+    font-family: 'Press Start 2P', cursive;
+    flex-direction: column;
+    position: relative;
+  }
+
+  canvas {
+    background: #111;
+    border: 2px solid #fff;
+    display: none;
+  }
+
+  /* Start Menu */
+  #menu {
+    text-align: center;
+  }
+
+  #startBtn {
+    padding: 12px 24px;
+    font-size: 18px;
+    cursor: pointer;
+    background: #0ff;
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-family: 'Press Start 2P', cursive;
+    box-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+  }
+
+  #startBtn:hover {
+    background: #5ff;
+    box-shadow: 0 0 15px #5ff, 0 0 30px #5ff;
+  }
+
+  /* Corner Link */
+  #copyright {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 12px;
+    opacity: 0.9;
+    text-shadow: 0 0 5px #0ff, 0 0 10px #0ff;
+  }
+
+  #copyright a {
+    color: #0ff;
+    text-decoration: none;
+  }
+
+  #copyright a:hover {
+    color: #fff;
+    text-shadow: 0 0 10px #fff, 0 0 20px #fff;
+  }
+
+  /* Download Button */
+  #download {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 12px;
+    opacity: 0.9;
+    text-shadow: 0 0 5px #0ff, 0 0 10px #0ff;
+  }
+
+  #download a {
+    color: #0ff;
+    text-decoration: none;
+    font-family: 'Press Start 2P', cursive;
+  }
+
+  #download a:hover {
+    color: #fff;
+    text-shadow: 0 0 10px #fff, 0 0 20px #fff;
+  }
+
+  #controls {
+    display: none;
+    margin-top: 10px;
+    text-shadow: 0 0 5px #0ff;
+  }
+</style>
+</head>
+<body>
+
+<!-- START MENU -->
+<div id="menu">
+  <h1 style="text-shadow: 0 0 10px #0ff;">TETRIS</h1>
+  <button id="startBtn">START GAME</button>
+</div>
+
+<!-- GAME CANVAS -->
+<canvas id="game" width="240" height="480"></canvas>
+<div id="controls">Use Arrow Keys — Up = Rotate</div>
+
+<!-- CORNER LINK -->
+<div id="copyright">
+  <a href="https://sites.google.com/view/funing/funing-games?authuser=0" target="_blank">
+    MADE BY FUNING GAMES
+  </a>
+</div>
+
+<!-- DOWNLOAD BUTTON -->
+<div id="download">
+  <a href="https://github.com/ryder619/tetris-game-HTML.git" download>DOWNLOAD GAME</a>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let gameRunning = false;
+
+const COLS = 10;
+const ROWS = 20;
+const BLOCK = 24;
+
+function createBoard() {
+  const board = [];
+  for (let r = 0; r < ROWS; r++) {
+    board[r] = new Array(COLS).fill(0);
+  }
+  return board;
+}
+
+const board = createBoard();
+
+const SHAPES = {
+  I: [[1,1,1,1]],
+  O: [[1,1],[1,1]],
+  T: [[0,1,0],[1,1,1]],
+  S: [[0,1,1],[1,1,0]],
+  Z: [[1,1,0],[0,1,1]],
+  J: [[1,0,0],[1,1,1]],
+  L: [[0,0,1],[1,1,1]]
+};
+
+const COLORS = {
+  I: "#00f0f0",
+  O: "#f0f000",
+  T: "#a000f0",
+  S: "#00f000",
+  Z: "#f00000",
+  J: "#0000f0",
+  L: "#f0a000"
+};
+
+function randomPiece() {
+  const types = Object.keys(SHAPES);
+  const type = types[Math.floor(Math.random() * types.length)];
+  return {
+    type,
+    shape: SHAPES[type].map(r => r.slice()),
+    x: 3,
+    y: 0
+  };
+}
+
+let current = randomPiece();
+let dropCounter = 0;
+let lastTime = 0;
+const dropInterval = 500;
+
+function drawBlock(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK);
+  ctx.strokeStyle = "#222";
+  ctx.strokeRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK);
+}
+
+function drawBoard() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c]) drawBlock(c, r, board[r][c]);
+    }
+  }
+
+  const color = COLORS[current.type];
+  current.shape.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value) drawBlock(current.x + x, current.y + y, color);
+    });
+  });
+}
+
+function collide(board, piece) {
+  for (let y = 0; y < piece.shape.length; y++) {
+    for (let x = 0; x < piece.shape[y].length; x++) {
+      if (piece.shape[y][x]) {
+        const newX = piece.x + x;
+        const newY = piece.y + y;
+
+        if (
+          newX < 0 ||
+          newX >= COLS ||
+          newY >= ROWS ||
+          (newY >= 0 && board[newY][newX])
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function merge(board, piece) {
+  const color = COLORS[piece.type];
+  piece.shape.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value) {
+        const bx = piece.x + x;
+        const by = piece.y + y;
+        if (by >= 0) board[by][bx] = color;
+      }
+    });
+  });
+}
+
+function rotate(matrix) {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+  const result = [];
+
+  for (let y = 0; y < cols; y++) {
+    result[y] = [];
+    for (let x = 0; x < rows; x++) {
+      result[y][x] = matrix[rows - 1 - x][y];
+    }
+  }
+  return result;
+}
+
+function clearLines() {
+  for (let y = ROWS - 1; y >= 0; y--) {
+    if (board[y].every(cell => cell !== 0)) {
+      board.splice(y, 1);
+      board.unshift(new Array(COLS).fill(0));
+      y++;
+    }
+  }
+}
+
+function drop() {
+  current.y++;
+  if (collide(board, current)) {
+    current.y--;
+    merge(board, current);
+    clearLines();
+    current = randomPiece();
+
+    if (collide(board, current)) {
+      for (let r = 0; r < ROWS; r++) board[r].fill(0);
+    }
+  }
+}
+
+function update(time = 0) {
+  if (!gameRunning) return;
+
+  const delta = time - lastTime;
+  lastTime = time;
+  dropCounter += delta;
+
+  if (dropCounter > dropInterval) {
+    drop();
+    dropCounter = 0;
+  }
+
+  drawBoard();
+  requestAnimationFrame(update);
+}
+
+document.addEventListener("keydown", e => {
+  if (!gameRunning) return;
+
+  if (e.key === "ArrowLeft") {
+    current.x--;
+    if (collide(board, current)) current.x++;
+  } else if (e.key === "ArrowRight") {
+    current.x++;
+    if (collide(board, current)) current.x--;
+  } else if (e.key === "ArrowDown") {
+    drop();
+    dropCounter = 0;
+  } else if (e.key === "ArrowUp") {
+    const oldShape = current.shape;
+    const rotated = rotate(current.shape);
+    current.shape = rotated;
+
+    if (collide(board, current)) {
+      current.shape = oldShape;
+    }
+  }
+});
+
+/* START BUTTON */
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("menu").style.display = "none";
+  canvas.style.display = "block";
+  document.getElementById("controls").style.display = "block";
+
+  gameRunning = true;
+  update();
+};
+
+/* important game funtions */
+function antiTamperCheck() {
+  const link = document.querySelector("#copyright a");
+  const correctText = "MADE BY FUNING GAMES";
+
+  if (link.textContent.trim() !== correctText) {
+    gameRunning = false;
+    document.body.innerHTML = `
+      <div style="
+        color: white;
+        font-family: 'Press Start 2P', cursive;
+        text-align: center;
+        margin-top: 20vh;
+      ">
+        <h1 style="text-shadow: 0 0 10px red;">😢</h1>
+        <h2>You can't add that you made it.</h2>
+        <h3>Game disabled.</h3>
+      </div>
+    `;
+  }
+}
+
+window.addEventListener("load", antiTamperCheck);
+</script>
+
+</body>
+</html>
