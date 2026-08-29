@@ -1,1 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Funing Snowy Mountain Climber</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<style>
+  body {
+    margin: 0;
+    background: #87ceeb;
+    color: #fff;
+    font-family: 'Press Start 2P', cursive;
+    overflow: hidden;
+    position: relative;
+  }
+
+  canvas {
+    display: block;
+    margin: 0 auto;
+    background: #b0d8ff;
+    border: 2px solid #ffffff;
+  }
+
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    text-align: center;
+    color: #123;
+    text-shadow: 0 0 2px #fff;
+  }
+
+  #versionTag {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 12px;
+    color: #123;
+    text-shadow: 0 0 2px #fff;
+  }
+
+  #copyright {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 12px;
+    color: #123;
+    text-shadow: 0 0 2px #fff;
+  }
+
+  #copyright a {
+    color: #123;
+    text-decoration: none;
+  }
+
+  #copyright a:hover {
+    text-decoration: underline;
+  }
+
+  #download {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 12px;
+    color: #123;
+    text-shadow: 0 0 2px #fff;
+  }
+
+  #download a {
+    color: #123;
+    text-decoration: none;
+    font-family: 'Press Start 2P', cursive;
+  }
+
+  #download a:hover {
+    text-decoration: underline;
+  }
+
+  #startOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.25);
+    text-align: center;
+    color: #fff;
+  }
+
+  #startOverlay h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 4px #000;
+  }
+
+  #startBtn {
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #ffffff;
+    border: none;
+    border-radius: 6px;
+    color: #123;
+    font-family: 'Press Start 2P', cursive;
+  }
+
+  #startBtn:hover {
+    background: #e0e0e0;
+  }
+</style>
+</head>
+<body>
+
+<div id="versionTag">(DOWNLOADED VERSION)</div>
+
+<div id="hud">
+  FUNING SNOWY MOUNTAIN CLIMBER<br>
+  Arrows = move • Space = jump • Stick to walls to climb
+</div>
+
+<div id="copyright">
+  <a href="https://sites.google.com/view/funing/funing-games?authuser=0" target="_blank">
+    MADE BY FUNING GAMES
+  </a>
+</div>
+
+<div id="download">
+  <a href="https://github.com/ryder619/tetris-game-HTML/edit/main/moutanin%20climb" download>DOWNLOAD GAME</a>
+</div>
+
+<div id="startOverlay">
+  <h1>SNOWY MOUNTAIN CLIMBER</h1>
+  <p>Easy mode • Soft pixel snow • Wall‑climb movement</p>
+  <p>Arrows to move • Space to jump • Hug walls to grab</p>
+  <button id="startBtn">START CLIMB</button>
+</div>
+
+<canvas id="game" width="800" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let started = false;
+let keys = {};
+
+const GRAVITY = 0.5;
+const FRICTION = 0.8;
+
+const player = {
+  x: 80,
+  y: 280,
+  width: 24,
+  height: 40,
+  vx: 0,
+  vy: 0,
+  speed: 2.5,
+  jumping: false,
+  onWall: false,
+  wallDir: 0 // -1 left, 1 right
+};
+
+const platforms = [
+  { x: 0,   y: 320, width: 300, height: 20, ice: false },
+  { x: 280, y: 280, width: 120, height: 20, ice: false },
+  { x: 430, y: 250, width: 120, height: 20, ice: true  },
+  { x: 580, y: 220, width: 120, height: 20, ice: false },
+  { x: 720, y: 190, width: 120, height: 20, ice: true  },
+  { x: 880, y: 260, width: 160, height: 20, ice: false },
+  { x: 1080,y: 230, width: 140, height: 20, ice: false }
+];
+
+let cameraOffsetX = 0;
+let score = 0;
+
+const snowflakes = [];
+for (let i = 0; i < 80; i++) {
+  snowflakes.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: 1 + Math.random() * 2,
+    s: 0.5 + Math.random() * 0.5
+  });
+}
+
+window.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+function updatePlayer() {
+  // Horizontal movement
+  if (keys["arrowleft"] || keys["a"]) {
+    player.vx = -player.speed;
+  } else if (keys["arrowright"] || keys["d"]) {
+    player.vx = player.speed;
+  } else if (!player.onWall) {
+    player.vx *= FRICTION;
+  }
+
+  // Jump
+  if ((keys[" "] || keys["space"]) && !player.jumping) {
+    player.vy = -9;
+    player.jumping = true;
+  }
+
+  // Gravity
+  if (player.onWall) {
+    player.vy += GRAVITY * 0.2; // slower fall on wall
+  } else {
+    player.vy += GRAVITY;
+  }
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  let onGround = false;
+  player.onWall = false;
+  player.wallDir = 0;
+
+  // Platform collision (top)
+  platforms.forEach(p => {
+    if (
+      player.x < p.x + p.width &&
+      player.x + player.width > p.x &&
+      player.y + player.height > p.y &&
+      player.y + player.height < p.y + p.height + 10 &&
+      player.vy >= 0
+    ) {
+      player.y = p.y - player.height;
+      player.vy = 0;
+      player.jumping = false;
+      onGround = true;
+
+      // ice slide: reduce friction by boosting vx slightly
+      if (p.ice) {
+        player.vx *= 1.05;
+      }
+    }
+  });
+
+  // Wall grab (sides)
+  platforms.forEach(p => {
+    const touchingLeft =
+      player.x + player.width > p.x &&
+      player.x + player.width < p.x + 10 &&
+      player.y + player.height > p.y &&
+      player.y < p.y + p.height;
+
+    const touchingRight =
+      player.x < p.x + p.width &&
+      player.x > p.x + p.width - 10 &&
+      player.y + player.height > p.y &&
+      player.y < p.y + p.height;
+
+    if (!onGround && (touchingLeft || touchingRight)) {
+      player.onWall = true;
+      player.wallDir = touchingLeft ? -1 : 1;
+      player.vy = Math.min(player.vy, 1); // slow slide
+      player.jumping = false;
+
+      // Wall jump
+      if ((keys[" "] || keys["space"])) {
+        player.vy = -9;
+        player.vx = -player.wallDir * 4;
+        player.onWall = false;
+        player.jumping = true;
+      }
+    }
+  });
+
+  // Floor
+  if (player.y + player.height > canvas.height) {
+    player.y = canvas.height - player.height;
+    player.vy = 0;
+    player.jumping = false;
+  }
+
+  // Camera
+  cameraOffsetX = player.x - 200;
+
+  // Score by height and distance
+  score = Math.max(score, Math.floor((player.x + (canvas.height - player.y)) / 20));
+}
+
+function updateSnow() {
+  snowflakes.forEach(f => {
+    f.y += f.s;
+    f.x += Math.sin(f.y * 0.01) * 0.2;
+    if (f.y > canvas.height) {
+      f.y = -5;
+      f.x = Math.random() * canvas.width;
+    }
+  });
+}
+
+function drawBackground() {
+  // Sky
+  ctx.fillStyle = "#b0d8ff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Mountains
+  ctx.save();
+  ctx.translate(-cameraOffsetX * 0.3, 0);
+
+  ctx.fillStyle = "#9cc0e0";
+  for (let i = 0; i < 5; i++) {
+    const baseX = i * 220;
+    const baseY = canvas.height - 60;
+    const peakX = baseX + 110;
+    const peakY = canvas.height - 200 - (i % 2) * 40;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(baseX + 220, baseY);
+    ctx.lineTo(peakX, peakY);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  // Snow ground
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+
+  // Snowflakes
+  ctx.fillStyle = "#ffffff";
+  snowflakes.forEach(f => {
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawPlatforms() {
+  ctx.save();
+  ctx.translate(-cameraOffsetX, 0);
+
+  platforms.forEach(p => {
+    ctx.fillStyle = p.ice ? "#e0f7ff" : "#ffffff";
+    ctx.fillRect(p.x, p.y, p.width, p.height);
+
+    // edge line
+    ctx.strokeStyle = "#c0c0c0";
+    ctx.strokeRect(p.x, p.y, p.width, p.height);
+  });
+
+  ctx.restore();
+}
+
+function drawPlayer() {
+  ctx.save();
+  ctx.translate(-cameraOffsetX, 0);
+
+  ctx.fillStyle = "#ffcc99";
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+
+  ctx.strokeStyle = "#000000";
+  ctx.strokeRect(player.x, player.y, player.width, player.height);
+
+  ctx.restore();
+}
+
+function drawHUD() {
+  ctx.fillStyle = "#123";
+  ctx.font = "10px 'Press Start 2P'";
+  ctx.textAlign = "left";
+  ctx.fillText("SCORE: " + score, 10, 20);
+}
+
+function gameLoop() {
+  if (!started) {
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  updatePlayer();
+  updateSnow();
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+  drawPlatforms();
+  drawPlayer();
+  drawHUD();
+
+  requestAnimationFrame(gameLoop);
+}
+
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("startOverlay").style.display = "none";
+  started = true;
+};
+
+// super important gave html code
+function antiTamperCheck() {
+  const link = document.querySelector("#copyright a");
+  const correctText = "MADE BY FUNING GAMES";
+
+  if (!link || link.textContent.trim() !== correctText) {
+    started = false;
+    document.body.innerHTML = `
+      <div style="
+        color: white;
+        font-family: 'Press Start 2P', cursive;
+        text-align: center;
+        margin-top: 20vh;
+      ">
+        <h1 style="text-shadow: 0 0 10px black;">😢</h1>
+        <h2>You can't add that you made it.</h2>
+        <h3>Game disabled.</h3>
+      </div>
+    `;
+  }
+}
+
+window.addEventListener("load", () => {
+  antiTamperCheck();
+  gameLoop();
+});
+</script>
+
+</body>
+</html>
 
